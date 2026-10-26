@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VIDEDIT AI - Editor de Video por Palabras & Inpainting Studio</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace']
+          },
+          colors: {
+            brand: {
+              gold: '#E5C158',
+              cyan: '#38BDF8',
+              purple: '#A855F7',
+              dark: '#090B10',
+              card: '#11141D'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { background-color: #090B10; color: #E2E8F0; font-family: 'Plus Jakarta Sans', sans-serif; }
+    .glass-card { background: linear-gradient(135deg, rgba(20, 24, 35, 0.85) 0%, rgba(13, 16, 24, 0.95) 100%); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); }
+    .glass-card:hover { border-color: rgba(168, 85, 247, 0.3); }
+    .gold-gradient-text { background: linear-gradient(135deg, #FFF0B3 0%, #E5C158 50%, #B38E28 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    #drawCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; cursor: crosshair; z-index: 20; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-purple-500/30 selection:text-purple-200">
+
+  <!-- TOP HEADER -->
+  <header class="border-b border-white/5 bg-[#0D1017]/80 backdrop-blur-md sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-purple-500/20">
+        <i class="ph-bold ph-magic-wand text-white text-xl"></i>
+      </div>
+      <div>
+        <h1 class="font-extrabold text-base tracking-wide text-white flex items-center gap-2">
+          VIDEDIT <span class="text-[10px] px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-mono">AI INPAINTING & VFX</span>
+        </h1>
+        <p class="text-[11px] text-gray-400">Edición de Video con IA: Eliminación Real de Objetos, Ropa y Motion Graphics</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-4 text-xs font-mono">
+      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Inpainting Activo
+      </span>
+      <span class="text-gray-500">Puerto :8686</span>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
+
+    <!-- HERO PROMPT & INPUT SECTION -->
+    <section class="glass-card rounded-2xl p-6 md:p-8 shadow-2xl relative overflow-hidden border-purple-500/20">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        
+        <!-- Left 2 Cols: Prompt & Presets -->
+        <div class="lg:col-span-2 space-y-4">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+              <i class="ph-bold ph-chat-circle-dots text-purple-400"></i> ¿Qué deseas editar o eliminar en el video?
+            </label>
+            <span class="text-[11px] text-emerald-400 font-mono">✓ Video original 100% protegido</span>
+          </div>
+
+          <textarea id="promptInput" rows="3" class="w-full bg-slate-900/90 border border-white/10 rounded-xl p-4 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all" placeholder="Escribe en lenguaje natural: Ej. 'Elimina la lámpara del fondo', 'Borrar el micrófono y aplicar Film Noir', 'Cambiar la ropa por un traje negro'..."></textarea>
+
+
+
+          <!-- Controls Row -->
+          <div class="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-white/5">
+            <div class="flex items-center gap-3">
+              <label class="text-xs text-gray-400">Formato:</label>
+              <select id="aspectSelect" class="bg-slate-800 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500">
+                <option value="keep">Mantener Original</option>
+                <option value="9:16">Vertical 9:16 (Shorts/TikTok/Reels)</option>
+                <option value="16:9">Horizontal 16:9 (YouTube)</option>
+              </select>
+            </div>
+
+            <button id="btnExecuteEdit" onclick="executeVideoEdit()" class="px-8 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs shadow-xl shadow-purple-500/25 flex items-center gap-2.5 transition-all">
+              <i class="ph-bold ph-sparkle text-base"></i> Ejecutar Inpainting & Edición
+            </button>
+          </div>
+        </div>
+
+        <!-- Right 1 Col: Video Picker & Uploader -->
+        <div class="bg-slate-900/80 border border-white/10 rounded-xl p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+              <i class="ph-bold ph-video-camera text-purple-400"></i> Video Fuente
+            </span>
+            <button onclick="loadAvailableVideos()" class="text-[11px] text-purple-400 hover:underline flex items-center gap-1">
+              <i class="ph-bold ph-arrows-clockwise"></i> Refrescar
+            </button>
+          </div>
+
+          <select id="videoSelect" onchange="onVideoSelectChange()" class="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500">
+            <option value="">Cargando videos disponibles...</option>
+          </select>
+
+          <!-- Drag and Drop Upload -->
+          <div id="dropZone" class="border-2 border-dashed border-white/10 hover:border-purple-500/50 rounded-xl p-4 text-center cursor-pointer transition-all bg-white/[0.02] hover:bg-purple-500/[0.05]" onclick="$('fileUploadInput').click()">
+            <input type="file" id="fileUploadInput" accept="video/*" class="hidden" onchange="handleFileUpload(event)">
+            <i class="ph-bold ph-cloud-arrow-up text-2xl text-purple-400 mb-1 block"></i>
+            <p class="text-xs text-gray-300 font-medium">Arrastra un video aquí o haz clic para subir</p>
+            <p class="text-[10px] text-gray-500 mt-0.5">MP4, MOV, MKV (Se guarda en inputs/)</p>
+          </div>
+
+          <div id="uploadStatusBadge" class="text-[11px] text-gray-400 text-center font-mono">
+            Listo para procesar
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- WORKSPACE: DUAL COMPARISON PLAYER -->
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+      
+      <!-- Left: Original Video with Interactive Selector -->
+      <div class="glass-card rounded-2xl p-5 space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-white">Video Original</h3>
+          </div>
+          <span id="originalMetaBadge" class="text-[11px] font-mono text-gray-400">Cargando...</span>
+        </div>
+
+        <!-- Interactive Object Tool Bar -->
+        <div class="p-2.5 rounded-xl bg-slate-900/90 border border-white/10 flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <button id="btnToggleDraw" onclick="toggleDrawingMode()" class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 flex items-center gap-1.5 transition-all">
+              <i class="ph-bold ph-cursor-click"></i> <span id="toggleDrawText">🎯 Dibujar Recuadro de Borrado</span>
+            </button>
+            <button onclick="clearEraseBox()" class="px-2 py-1 rounded-lg text-[11px] text-gray-400 hover:text-white transition-all">
+              Limpiar
+            </button>
+          </div>
+          <span id="eraseBoxBadge" class="text-[11px] font-mono text-gray-500">Ningún objeto marcado</span>
+        </div>
+
+        <div class="aspect-video bg-black rounded-xl overflow-hidden flex items-center justify-center border border-white/5 relative">
+          <video id="originalVideoPlayer" controls class="w-full h-full object-contain"></video>
+          <canvas id="drawCanvas" class="hidden"></canvas>
+        </div>
+      </div>
+
+      <!-- Right: AI Edited Video -->
+      <div class="glass-card rounded-2xl p-5 space-y-3 border-purple-500/30">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-purple-500 animate-pulse"></span>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-purple-300">Video Editado (Objeto Eliminado / VFX)</h3>
+          </div>
+          <span id="editedMetaBadge" class="text-[11px] font-mono text-purple-400">Sin procesar</span>
+        </div>
+
+        <div class="aspect-video bg-black rounded-xl overflow-hidden flex items-center justify-center border border-white/5 relative">
+          <video id="editedVideoPlayer" controls class="w-full h-full object-contain hidden"></video>
+          <div id="editedPlaceholder" class="text-center p-8 text-gray-500">
+            <i class="ph-bold ph-sparkle text-4xl mb-2 opacity-40 block text-purple-400"></i>
+            <p class="text-xs">El resultado sin el objeto y con los efectos aparecerá aquí</p>
+          </div>
+        </div>
+
+        <div id="downloadActionRow" class="pt-2 flex gap-3 hidden">
+          <a id="btnDownloadEdited" href="#" download class="flex-1 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs text-center transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-600/20">
+            <i class="ph-bold ph-download-simple text-base"></i> Descargar MP4 Editado
+          </a>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- LIVE TERMINAL LOGS -->
+    <section class="glass-card rounded-2xl p-5 font-mono text-xs space-y-3 bg-slate-950/80">
+      <div class="flex items-center justify-between border-b border-white/10 pb-3">
+        <span class="text-purple-400 font-bold flex items-center gap-2">
+          <i class="ph-bold ph-terminal-window"></i> Traza de Inpainting y Operaciones en Fotogramas
+        </span>
+        <span class="text-[10px] text-gray-500">Harness² Active Engine</span>
+      </div>
+
+      <div id="terminalLogs" class="space-y-1.5 text-gray-300 text-[11px] max-h-[220px] overflow-y-auto leading-relaxed">
+        <div class="text-gray-600">> Motor listo. Escribe tu instrucción o marca el objeto en pantalla.</div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let allVideos = [];
+    let currentSelectedVideo = null;
+    let eraseBoxData = null; // { x, y, w, h }
+    let isDrawingMode = false;
+    let isMouseDown = false;
+    let startX = 0, startY = 0;
+
+
+
+    async function loadAvailableVideos() {
+      try {
+        const res = await fetch('/api/videos');
+        const data = await res.json();
+        allVideos = data.videos || [];
+        const select = $('videoSelect');
+        select.innerHTML = '';
+
+        if (allVideos.length === 0) {
+          select.innerHTML = '<option value="">No hay videos en inputs/</option>';
+          return;
+        }
+
+        allVideos.forEach((v) => {
+          const opt = document.createElement('option');
+          opt.value = v.name;
+          opt.innerText = `${v.name} (${v.size_mb} MB)`;
+          select.appendChild(opt);
+        });
+
+        onVideoSelectChange();
+      } catch (err) {
+        console.error('Error cargando videos:', err);
+      }
+    }
+
+    function onVideoSelectChange() {
+      const select = $('videoSelect');
+      const val = select.value;
+      const vidObj = allVideos.find(v => v.name === val);
+      if (vidObj) {
+        currentSelectedVideo = vidObj;
+        const player = $('originalVideoPlayer');
+        player.src = vidObj.url;
+        $('originalMetaBadge').innerText = `${vidObj.size_mb} MB | Original Protegido`;
+        clearEraseBox();
+      }
+    }
+
+    // DRAWING RECTANGLE TOOL ON VIDEO
+    function toggleDrawingMode() {
+      isDrawingMode = !isDrawingMode;
+      const canvas = $('drawCanvas');
+      const btnText = $('toggleDrawText');
+      if (isDrawingMode) {
+        canvas.classList.remove('hidden');
+        btnText.innerText = '✕ Cancelar Dibujo';
+        initCanvas();
+      } else {
+        canvas.classList.add('hidden');
+        btnText.innerText = '🎯 Dibujar Recuadro de Borrado';
+      }
+    }
+
+    function clearEraseBox() {
+      eraseBoxData = null;
+      $('eraseBoxBadge').innerText = 'Ningún objeto marcado';
+      const canvas = $('drawCanvas');
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function initCanvas() {
+      const canvas = $('drawCanvas');
+      const player = $('originalVideoPlayer');
+      const rect = player.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+
+      const ctx = canvas.getContext('2d');
+
+      canvas.onmousedown = (e) => {
+        isMouseDown = true;
+        const cRect = canvas.getBoundingClientRect();
+        startX = e.clientX - cRect.left;
+        startY = e.clientY - cRect.top;
+      };
+
+      canvas.onmousemove = (e) => {
+        if (!isMouseDown) return;
+        const cRect = canvas.getBoundingClientRect();
+        const curX = e.clientX - cRect.left;
+        const curY = e.clientY - cRect.top;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = '#F43F5E';
+        ctx.lineWidth = 2.5;
+        ctx.strokeRect(startX, startY, curX - startX, curY - startY);
+        ctx.fillStyle = 'rgba(244, 63, 94, 0.25)';
+        ctx.fillRect(startX, startY, curX - startX, curY - startY);
+      };
+
+      canvas.onmouseup = (e) => {
+        if (!isMouseDown) return;
+        isMouseDown = false;
+        const cRect = canvas.getBoundingClientRect();
+        const endX = e.clientX - cRect.left;
+        const endY = e.clientY - cRect.top;
+
+        const left = Math.min(startX, endX);
+        const top = Math.min(startY, endY);
+        const w = Math.abs(endX - startX);
+        const h = Math.abs(endY - startY);
+
+        if (w > 10 && h > 10) {
+          // Escalar a coordenadas nativas del video (1080x1920)
+          const scaleX = (player.videoWidth || 1080) / canvas.width;
+          const scaleY = (player.videoHeight || 1920) / canvas.height;
+
+          eraseBoxData = {
+            x: Math.round(left * scaleX),
+            y: Math.round(top * scaleY),
+            w: Math.round(w * scaleX),
+            h: Math.round(h * scaleY)
+          };
+
+          $('eraseBoxBadge').innerHTML = `<span class="text-rose-400 font-bold">Objeto marcado: X=${eraseBoxData.x}, Y=${eraseBoxData.y}, W=${eraseBoxData.w}, H=${eraseBoxData.h}</span>`;
+          $('promptInput').value = $('promptInput').value || 'Eliminar el objeto seleccionado con inpainting temporal.';
+        }
+      };
+    }
+
+    async function handleFileUpload(evt) {
+      const file = evt.target.files[0];
+      if (!file) return;
+
+      const badge = $('uploadStatusBadge');
+      badge.innerHTML = '<span class="text-purple-400">Subiendo video...</span>';
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+          badge.innerHTML = `<span class="text-emerald-400">✓ ${data.name} listo</span>`;
+          await loadAvailableVideos();
+          $('videoSelect').value = data.name;
+          onVideoSelectChange();
+        }
+      } catch (err) {
+        badge.innerHTML = '<span class="text-rose-400">Error subiendo archivo</span>';
+      }
+    }
+
+    async function executeVideoEdit() {
+      const prompt = $('promptInput').value.trim();
+      if (!prompt && !eraseBoxData) {
+        alert('Por favor escribe qué deseas editar o marca un objeto con el ratón.');
+        return;
+      }
+      if (!currentSelectedVideo) {
+        alert('Selecciona un video fuente para editar.');
+        return;
+      }
+
+      const btn = $('btnExecuteEdit');
+      const origHtml = btn.innerHTML;
+      btn.innerHTML = '<i class="ph-bold ph-spinner animate-spin"></i> Ejecutando Inpainting IA...';
+      btn.disabled = true;
+
+      const logsBox = $('terminalLogs');
+      logsBox.innerHTML = '<div class="text-purple-400 font-bold">> Iniciando motor de inpainting y edición de video...</div>';
+
+      try {
+        const res = await fetch('/api/edit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            video_filename: currentSelectedVideo.name,
+            prompt: prompt || 'Eliminar objeto marcado',
+            aspect_ratio: $('aspectSelect').value,
+            erase_box: eraseBoxData
+          })
+        });
+
+        const data = await res.json();
+        if (res.ok && data.status === 'success') {
+          if (data.logs) {
+            logsBox.innerHTML = data.logs.map(l => `<div class="text-gray-300">> ${l}</div>`).join('');
+          }
+
+          const player = $('editedVideoPlayer');
+          const placeholder = $('editedPlaceholder');
+          const downloadRow = $('downloadActionRow');
+          const dlBtn = $('btnDownloadEdited');
+          const meta = $('editedMetaBadge');
+
+          player.src = data.output_url;
+          player.classList.remove('hidden');
+          placeholder.classList.add('hidden');
+          downloadRow.classList.remove('hidden');
+          dlBtn.href = data.output_url;
+          meta.innerText = `${data.resolution} | ${data.duration.toFixed(1)}s (Inpainting Exitoso)`;
+          player.play().catch(() => {});
+        } else {
+          throw new Error(data.detail || 'Fallo durante la edición');
+        }
+      } catch (err) {
+        logsBox.innerHTML += `<div class="text-rose-400 font-bold">> Error: ${err.message}</div>`;
+      } finally {
+        btn.innerHTML = origHtml;
+        btn.disabled = false;
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadAvailableVideos();
+    });
+  </script>
+</body>
+</html>
